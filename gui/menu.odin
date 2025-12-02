@@ -5,6 +5,8 @@ import "core:strings"
 import "core:fmt"
 import "vendor:sdl3"
 
+import "../prof"
+
 MenuButton :: struct
 {
    using element: Element,
@@ -16,6 +18,8 @@ MenuButton :: struct
 
 menu_create :: proc(parent: ^Element, flags: ElementFlags, cflags: ElementFlags, labels: []string, msg_usr: MsgHandler) -> ^Group
 {
+   prof.SCOPED_EVENT(#procedure)
+
    group: ^Group = group_create(parent, flags)
    for label, idx in labels
    {
@@ -29,18 +33,20 @@ menu_create :: proc(parent: ^Element, flags: ElementFlags, cflags: ElementFlags,
 }
 
 @(private="file")
-menubutton_msg :: proc(e: ^Element, msg: Msg, di: int, dp: rawptr) -> int
+menubutton_msg :: proc(e: ^Element, msg: Msg, di: i64, dp: rawptr) -> i64
 {
+   prof.SCOPED_EVENT(#procedure)
+
    //fmt.printf("MSG %v\n", msg)
    button: ^MenuButton = &e.derived.(MenuButton)
 
    if msg == .GET_WIDTH
    {
-      return len(button.text) * int(GLYPH_WIDTH * get_scale()) + int(10 * get_scale())
+      return i64(len(button.text)) * i64(GLYPH_WIDTH * get_scale()) + i64(10 * get_scale())
    }
    else if msg == .GET_HEIGHT
    {
-      return int(GLYPH_HEIGHT * get_scale()) + int(8 * get_scale())
+      return i64(GLYPH_HEIGHT * get_scale()) + i64(8 * get_scale())
    }
    else if msg == .MOUSE_LEAVE
    {
@@ -80,7 +86,7 @@ menubutton_msg :: proc(e: ^Element, msg: Msg, di: int, dp: rawptr) -> int
 
       if click
       {
-         element_msg(button, .CLICK, 0, nil)
+         element_msg(button, .CLICK_MENU, i64(button.idx), nil)
          button.state = false
       }
    }

@@ -12,6 +12,8 @@ import "core:strings"
 import "core:fmt"
 import "vendor:sdl3"
 
+import "../prof"
+
 Image :: struct
 {
    using element: Element,
@@ -23,6 +25,8 @@ Image :: struct
 
 image_create :: proc(parent: ^Element, flags: ElementFlags, path: string) -> ^Image
 {
+   prof.SCOPED_EVENT(#procedure)
+
    imge: ^Image= &element_create(Image, parent, flags, image_msg).derived.(Image)
    //image.text = strings.clone(str)
 
@@ -43,17 +47,19 @@ image_create :: proc(parent: ^Element, flags: ElementFlags, path: string) -> ^Im
 }
 
 @(private="file")
-image_msg :: proc(e: ^Element, msg: Msg, di: int, dp: rawptr) -> int
+image_msg :: proc(e: ^Element, msg: Msg, di: i64, dp: rawptr) -> i64
 {
+   prof.SCOPED_EVENT(#procedure)
+
    img: ^Image = &e.derived.(Image)
 
    if msg == .GET_WIDTH
    {
-      return int(img.width + 6 * get_scale())
+      return i64(img.width + 6 * get_scale())
    }
    else if msg == .GET_HEIGHT
    {
-      return int(img.height + 6 * get_scale())
+      return i64(img.height + 6 * get_scale())
    }
    else if msg == .DRAW
    {

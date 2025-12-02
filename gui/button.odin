@@ -4,6 +4,8 @@ import "core:log"
 import "core:strings"
 import "vendor:sdl3"
 
+import "../prof"
+
 Button :: struct
 {
    using element: Element,
@@ -14,6 +16,8 @@ Button :: struct
 
 button_create :: proc(parent: ^Element, flags: ElementFlags, str: string) -> ^Button
 {
+   prof.SCOPED_EVENT(#procedure)
+
    button: ^Button = &element_create(Button, parent, flags, button_msg).derived.(Button)
    button.text = strings.clone(str)
 
@@ -21,17 +25,19 @@ button_create :: proc(parent: ^Element, flags: ElementFlags, str: string) -> ^Bu
 }
 
 @(private="file")
-button_msg :: proc(e: ^Element, msg: Msg, di: int, dp: rawptr) -> int
+button_msg :: proc(e: ^Element, msg: Msg, di: i64, dp: rawptr) -> i64
 {
+   prof.SCOPED_EVENT(#procedure)
+
    button: ^Button = &e.derived.(Button)
 
    if msg == .GET_WIDTH
    {
-      return len(button.text) * int(GLYPH_WIDTH * get_scale()) + int(10 * get_scale())
+      return i64(len(button.text)) * i64(GLYPH_WIDTH * get_scale()) + i64(10 * get_scale())
    }
    else if msg == .GET_HEIGHT
    {
-      return int(GLYPH_HEIGHT * get_scale()) + int(8 * get_scale())
+      return i64(GLYPH_HEIGHT * get_scale()) + i64(8 * get_scale())
    }
    else if msg == .MOUSE_LEAVE
    {

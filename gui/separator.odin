@@ -4,6 +4,8 @@ import "core:log"
 import "core:strings"
 import "vendor:sdl3"
 
+import "../prof"
+
 Separator :: struct
 {
    using element: Element,
@@ -12,6 +14,8 @@ Separator :: struct
 
 separator_create :: proc(parent: ^Element, flags: ElementFlags, direction: bool) -> ^Separator
 {
+   prof.SCOPED_EVENT(#procedure)
+
    separator: ^Separator = &element_create(Separator, parent, flags, separator_msg).derived.(Separator)
    separator.direction = direction
 
@@ -19,17 +23,19 @@ separator_create :: proc(parent: ^Element, flags: ElementFlags, direction: bool)
 }
 
 @(private="file")
-separator_msg :: proc(e: ^Element, msg: Msg, di: int, dp: rawptr) -> int
+separator_msg :: proc(e: ^Element, msg: Msg, di: i64, dp: rawptr) -> i64
 {
+   prof.SCOPED_EVENT(#procedure)
+
    separator: ^Separator = &e.derived.(Separator)
 
    if msg == .GET_WIDTH
    {
-      return int(get_scale())
+      return i64(get_scale())
    }
    else if msg == .GET_HEIGHT
    {
-      return int(get_scale())
+      return i64(get_scale())
    }
    else if msg == .DRAW
    {

@@ -4,6 +4,8 @@ import "core:log"
 import "core:strings"
 import "vendor:sdl3"
 
+import "../prof"
+
 CheckButton :: struct
 {
    using element: Element,
@@ -15,24 +17,49 @@ CheckButton :: struct
 
 checkbutton_create :: proc(parent: ^Element, flags: ElementFlags, str: string) -> ^CheckButton
 {
+   prof.SCOPED_EVENT(#procedure)
+
    button: ^CheckButton = &element_create(CheckButton, parent, flags, checkbutton_msg).derived.(CheckButton)
    button.text = strings.clone(str)
 
    return button
 }
 
-@(private="file")
-checkbutton_msg :: proc(e: ^Element, msg: Msg, di: int, dp: rawptr) -> int
+checkbutton_set :: proc(c: ^CheckButton, checked: bool, trigger_msg: bool, redraw: bool)
 {
+   prof.SCOPED_EVENT(#procedure)
+
+   if c == nil do return
+
+   previously: bool = c.checked
+   c.checked = checked
+   if previously != c.checked
+   {
+      if trigger_msg
+      {
+         element_msg(c, .CLICK, i64(c.checked), nil)
+      }
+      if redraw
+      {
+         element_redraw(c)
+      }
+   }
+}
+
+@(private="file")
+checkbutton_msg :: proc(e: ^Element, msg: Msg, di: i64, dp: rawptr) -> i64
+{
+   prof.SCOPED_EVENT(#procedure)
+
    button: ^CheckButton = &e.derived.(CheckButton)
 
    if msg == .GET_WIDTH
    {
-      return (GLYPH_HEIGHT + 8) * int(get_scale()) + len(button.text) * int(GLYPH_WIDTH * get_scale()) + int(10 * get_scale())
+      return (GLYPH_HEIGHT + 8) * i64(get_scale()) + i64(len(button.text)) * i64(GLYPH_WIDTH * get_scale()) + i64(10 * get_scale())
    }
    else if msg == .GET_HEIGHT
    {
-      return int(GLYPH_HEIGHT * get_scale()) + int(8 * get_scale())
+      return i64(GLYPH_HEIGHT * get_scale()) + i64(8 * get_scale())
    }
    else if msg == .MOUSE_LEAVE
    {
@@ -68,7 +95,7 @@ checkbutton_msg :: proc(e: ^Element, msg: Msg, di: int, dp: rawptr) -> int
       if click
       {
          button.checked = !button.checked
-         element_msg(button, .CLICK, int(button.checked), nil)
+         element_msg(button, .CLICK, i64(button.checked), nil)
          button.state = false
       }
 

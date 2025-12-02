@@ -3,6 +3,8 @@ package gui
 import "core:log"
 import "vendor:sdl3"
 
+import "../prof"
+
 draw_disable_clip :: proc(e: ^Element)
 {
    res: bool = sdl3.SetRenderClipRect(e.window.sdl_renderer, nil)
@@ -88,6 +90,8 @@ draw_rectangle :: proc(e: ^Element, rect: Rect, colour: [4]u8)
 
 draw_text :: proc(e: ^Element, rect: Rect, text: string, colour: [4]u8, do_wrap: bool)
 {
+   prof.SCOPED_EVENT(#procedure)
+
    // TODO: merge old and new clip rect
    //old_clip: Rect
    //old_do_clip: bool
@@ -150,6 +154,8 @@ draw_text :: proc(e: ^Element, rect: Rect, text: string, colour: [4]u8, do_wrap:
 
 draw_label :: proc(e: ^Element, rect: Rect, text: string, colour: [4]u8, center: bool)
 {
+   prof.SCOPED_EVENT(#procedure)
+
    // TODO: merge old and new clip rect
    //old_clip: Rect
    //old_do_clip: bool

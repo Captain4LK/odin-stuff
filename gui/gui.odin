@@ -2,7 +2,17 @@ package gui
 
 import "core:log"
 import "core:fmt"
+import "core:strings"
 import "vendor:sdl3"
+import "core:image/png"
+import "core:image/qoi"
+import "core:image/tga"
+import "core:image/bmp"
+import "core:image/netpbm"
+import "core:image"
+import "core:bytes"
+
+import "../prof"
 
 GLYPH_WIDTH :: 9
 GLYPH_HEIGHT :: 16
@@ -14,6 +24,8 @@ Context :: struct
    windows: [dynamic]^Window,
    scale: i32,
    mouse: Mouse,
+   timer_event: u32,
+   open_file_event: u32,
 }
 
 @(private="file")
@@ -24,6 +36,7 @@ Layout :: enum u8
 {
    VERTICAL = 0,
    HORIZONTAL = 1,
+   WRAP = 2,
 }
 
 MouseState :: enum
@@ -56,7 +69,7 @@ Rect :: struct
 
 ElementFlags :: bit_field u64
 {
-   layout: Layout | 1,
+   layout: Layout | 2,
    style: u32 | 4,
 
    center_x: bool | 1,
@@ -78,7 +91,7 @@ ElementFlags :: bit_field u64
    // Layouting
 }
 
-MsgHandler :: proc(e: ^Element, msg: Msg, di: int, dp: rawptr) -> int
+MsgHandler :: proc(e: ^Element, msg: Msg, di: i64, dp: rawptr) -> i64
 
 Element :: struct
 {
@@ -97,6 +110,10 @@ Element :: struct
    window: ^Window,
    last_mouse: ^Element,
    children: [dynamic]^Element,
+
+   // Timer
+   timer: sdl3.TimerID,
+   timer_interval: u64,
 
    // Layouting
    size: [2]i32,
@@ -162,6 +179,9 @@ Msg :: enum
    TEXTINPUT_END,
    MOUSE_LEAVE,
    DRAGNDROP,
+
+   OPENFILE,
+
    USER0,
 }
 
@@ -193,6 +213,8 @@ Window :: struct
 
 init :: proc() -> bool
 {
+   prof.SCOPED_EVENT(#procedure)
+
    res: bool = sdl3.Init({.VIDEO, .EVENTS})
    if !res
    {
@@ -273,11 +295,16 @@ init :: proc() -> bool
 
    set_scale(1)
 
+   ctx.timer_event = sdl3.RegisterEvents(1)
+   ctx.open_file_event = sdl3.RegisterEvents(1)
+
    return true
 }
 
 window_create :: proc(title: cstring, width: i32, height: i32, path_icon: string) -> ^Window
 {
+   prof.SCOPED_EVENT(#procedure)
+
    window: ^Window = &element_create(Window, nil, {}, window_msg).derived.(Window)
    window.window = window
    window.width = width
@@ -304,11 +331,31 @@ window_create :: proc(title: cstring, width: i32, height: i32, path_icon: string
    res = sdl3.SetWindowSize(window.sdl_window, width, height)
    if !res do log.errorf("SetWindowSize failed: %v", sdl3.GetError())
 
+   //surface: sdl3.Surface
+   //window.sdl_icons = nil
+   img: ^image.Image
+   err: image.Error
+   img, err = image.load_from_file(path_icon)
+   defer image.destroy(img)
+   image.alpha_add_if_missing(img)
+   if err != nil
+   {
+      log.errorf("failed to load image \"%v\": %v\n", path_icon, err)
+   }
+
+   data: []u8 = bytes.buffer_to_bytes(&img.pixels)
+   surface: ^sdl3.Surface = sdl3.CreateSurfaceFrom(i32(img.width), i32(img.height), .RGBA32, raw_data(data), i32(img.width * 4))
+   defer sdl3.DestroySurface(surface)
+   window.sdl_icons = sdl3.CreateTextureFromSurface(window.sdl_renderer, surface)
+   sdl3.SetTextureScaleMode(window.sdl_icons, .NEAREST)
+
    return window
 }
 
 quit_event :: proc()
 {
+   prof.SCOPED_EVENT(#procedure)
+
    for i := 0; i < len(ctx.windows); i += 1
    {
       element_destroy(ctx.windows[i])
@@ -317,6 +364,8 @@ quit_event :: proc()
 
 exposed_event :: proc(window_id: sdl3.WindowID) -> ^Window
 {
+   prof.SCOPED_EVENT(#procedure)
+
    res: bool
    win: ^Window = find_window(sdl3.GetWindowFromID(window_id))
    if win == nil do return nil
@@ -341,6 +390,8 @@ exposed_event :: proc(window_id: sdl3.WindowID) -> ^Window
 
 resized_event :: proc(window_id: sdl3.WindowID, width: i32, height: i32) -> ^Window
 {
+   prof.SCOPED_EVENT(#procedure)
+
    width := width
    height := height
    res: bool
@@ -382,6 +433,8 @@ resized_event :: proc(window_id: sdl3.WindowID, width: i32, height: i32) -> ^Win
 
 mouse_leave_event :: proc(window_id: sdl3.WindowID) -> ^Window
 {
+   prof.SCOPED_EVENT(#procedure)
+
    res: bool
    win: ^Window = find_window(sdl3.GetWindowFromID(window_id))
    if win == nil do return nil
@@ -396,6 +449,8 @@ mouse_leave_event :: proc(window_id: sdl3.WindowID) -> ^Window
 
 close_event :: proc(window_id: sdl3.WindowID) -> (quit: bool)
 {
+   prof.SCOPED_EVENT(#procedure)
+
    win: ^Window = find_window(sdl3.GetWindowFromID(window_id))
    if win == nil do return false
    
@@ -428,6 +483,8 @@ close_event :: proc(window_id: sdl3.WindowID) -> (quit: bool)
 
 mouse_motion_event :: proc(window_id: sdl3.WindowID, xrel: f32, yrel: f32) -> ^Window
 {
+   prof.SCOPED_EVENT(#procedure)
+
    win: ^Window = find_window(sdl3.GetWindowFromID(window_id))
    if win == nil do return nil
 
@@ -449,6 +506,8 @@ mouse_motion_event :: proc(window_id: sdl3.WindowID, xrel: f32, yrel: f32) -> ^W
 
 mouse_wheel_event :: proc(window_id: sdl3.WindowID, wheel: f32) -> ^Window
 {
+   prof.SCOPED_EVENT(#procedure)
+
    win: ^Window = find_window(sdl3.GetWindowFromID(window_id))
    if win == nil do return win
    
@@ -461,6 +520,8 @@ mouse_wheel_event :: proc(window_id: sdl3.WindowID, wheel: f32) -> ^Window
 key_down_event :: proc(window_id: sdl3.WindowID, keycode: sdl3.Keycode, 
    scancode: sdl3.Scancode, repeat: bool) -> ^Window
 {
+   prof.SCOPED_EVENT(#procedure)
+
    //if event.key.down
    //{
    win: ^Window = find_window(sdl3.GetWindowFromID(window_id))
@@ -478,11 +539,11 @@ key_down_event :: proc(window_id: sdl3.WindowID, keycode: sdl3.Keycode,
       // TODO: pass in dp?
       if repeat
       {
-         element_msg_all(win, .BUTTON_REPEAT, int(scancode), nil)
+         element_msg_all(win, .BUTTON_REPEAT, i64(scancode), nil)
       }
       else
       {
-         element_msg_all(win, .BUTTON_DOWN, int(scancode), nil)
+         element_msg_all(win, .BUTTON_DOWN, i64(scancode), nil)
       }
    }
 
@@ -494,10 +555,12 @@ key_down_event :: proc(window_id: sdl3.WindowID, keycode: sdl3.Keycode,
 
 key_up_event :: proc(window_id: sdl3.WindowID, scancode: sdl3.Scancode) -> ^Window
 {
+   prof.SCOPED_EVENT(#procedure)
+
    win: ^Window = find_window(sdl3.GetWindowFromID(window_id))
    if win == nil do return nil
    
-   element_msg_all(win, .BUTTON_UP, int(scancode), nil)
+   element_msg_all(win, .BUTTON_UP, i64(scancode), nil)
 
    win = find_window(sdl3.GetWindowFromID(window_id))
 
@@ -506,6 +569,8 @@ key_up_event :: proc(window_id: sdl3.WindowID, scancode: sdl3.Scancode) -> ^Wind
 
 drop_file_event :: proc(window_id: sdl3.WindowID, data: cstring) -> ^Window
 {
+   prof.SCOPED_EVENT(#procedure)
+
    win: ^Window = find_window(sdl3.GetWindowFromID(window_id))
    if win == nil do return nil
    
@@ -517,6 +582,8 @@ drop_file_event :: proc(window_id: sdl3.WindowID, data: cstring) -> ^Window
 
 button_down_event :: proc(window_id: sdl3.WindowID, x: f32, y: f32, button: u8, clicks: u8) -> ^Window
 {
+   prof.SCOPED_EVENT(#procedure)
+
    win: ^Window = find_window(sdl3.GetWindowFromID(window_id))
    if win == nil do return nil
 
@@ -548,6 +615,8 @@ button_down_event :: proc(window_id: sdl3.WindowID, x: f32, y: f32, button: u8, 
 
 button_up_event :: proc(window_id: sdl3.WindowID, button: u8) -> ^Window
 {
+   prof.SCOPED_EVENT(#procedure)
+
    win: ^Window = find_window(sdl3.GetWindowFromID(window_id))
    if win == nil do return win
 
@@ -574,6 +643,8 @@ button_up_event :: proc(window_id: sdl3.WindowID, button: u8) -> ^Window
 
 text_input_event :: proc(window_id: sdl3.WindowID, text: cstring) -> ^Window
 {
+   prof.SCOPED_EVENT(#procedure)
+
    win: ^Window = find_window(sdl3.GetWindowFromID(window_id))
    if win == nil do return nil
 
@@ -594,6 +665,8 @@ text_input_event :: proc(window_id: sdl3.WindowID, text: cstring) -> ^Window
 // for running at a fixed framerate
 msg_loop :: proc()
 {
+   prof.SCOPED_EVENT(#procedure)
+
    for
    {
       event: sdl3.Event
@@ -805,6 +878,7 @@ msg_loop :: proc()
       case .MOUSE_BUTTON_DOWN:
          if event.button.down
          {
+            win = button_down_event(event.button.windowID, event.button.x, event.button.y, event.button.button, event.button.clicks)
          }
          /*
          if event.button.down
@@ -839,6 +913,11 @@ msg_loop :: proc()
       case .MOUSE_BUTTON_UP:
          if !event.button.down
          {
+            win = button_up_event(event.button.windowID, event.button.button)
+         }
+         /*
+         if !event.button.down
+         {
             win = find_window(sdl3.GetWindowFromID(event.window.windowID))
             if win == nil do continue
 
@@ -860,7 +939,10 @@ msg_loop :: proc()
 
             win = find_window(sdl3.GetWindowFromID(event.window.windowID))
          }
+         */
       case .TEXT_INPUT:
+         win = text_input_event(event.text.windowID, event.text.text)
+         /*
          //fmt.printf("TextInputEent\n")
          win = find_window(sdl3.GetWindowFromID(event.window.windowID))
          if win == nil do continue
@@ -874,6 +956,36 @@ msg_loop :: proc()
          }
 
          win = find_window(sdl3.GetWindowFromID(event.window.windowID))
+         */
+      case sdl3.EventType(ctx.timer_event):
+         win = find_window(sdl3.GetWindowFromID(event.user.windowID))
+         if win != nil
+         {
+            element_msg(cast(^Element)event.user.data1, .TIMER, 0, nil)
+
+            // Make sure we do not flood the event queue if our update took longer
+            // than the timer interval (slow frame in game)
+            sdl3.FlushEvent(sdl3.EventType(ctx.timer_event))
+         }
+
+         win = find_window(sdl3.GetWindowFromID(event.user.windowID))
+      case sdl3.EventType(ctx.open_file_event):
+         win = find_window(sdl3.GetWindowFromID(event.user.windowID))
+         if win != nil
+         {
+            element_msg(win, .OPENFILE, 0, event.user.data1)
+         }
+
+         // delete msg context
+         msg: ^OpenFileMsg = cast(^OpenFileMsg)event.user.data1
+         for file in msg.file_list
+         {
+            delete(file)
+         }
+         delete(msg.file_list)
+         free(msg)
+
+         win = find_window(sdl3.GetWindowFromID(event.user.windowID))
       }
 
       if win != nil && win.redraw
@@ -915,6 +1027,8 @@ msg_loop :: proc()
 
 set_scale :: proc(scale: i32)
 {
+   prof.SCOPED_EVENT(#procedure)
+
    ctx.scale = scale
 }
 
@@ -926,6 +1040,8 @@ get_scale :: proc() -> i32
 @(private="file")
 handle_mouse_intern :: proc(root: ^Element, e: ^Element, m: ^Mouse)
 {
+   prof.SCOPED_EVENT(#procedure)
+
    old_trans: [2]i32 = e.window.translation
    e.window.translation += e.translate
    pt: [2]f32 = m.pos
@@ -934,7 +1050,8 @@ handle_mouse_intern :: proc(root: ^Element, e: ^Element, m: ^Mouse)
    {
       child: ^Element = e.children[i]
 
-      if element_ignored(child) do continue
+      if child.flags.ignore do continue
+      //if element_ignored(child) do continue
 
       b: Rect = child.bounds
       b.min += e.window.translation
@@ -954,7 +1071,7 @@ handle_mouse_intern :: proc(root: ^Element, e: ^Element, m: ^Mouse)
    if !m.handled
    {
       //element_msg(e, 
-      capture: int = element_msg(e, .MOUSE, 0, m)
+      capture: i64 = element_msg(e, .MOUSE, 0, m)
       if m.handled
       {
          if root.last_mouse != nil && root.last_mouse != e
@@ -998,6 +1115,8 @@ handle_mouse_intern :: proc(root: ^Element, e: ^Element, m: ^Mouse)
 
 handle_mouse :: proc(e: ^Element, m: Mouse)
 {
+   prof.SCOPED_EVENT(#procedure)
+
    click: ^Element
 
    if e.flags.capture_mouse
@@ -1006,7 +1125,7 @@ handle_mouse :: proc(e: ^Element, m: Mouse)
       if click != nil
       {
          m := m
-         capture: int = element_msg(click, .MOUSE, 0, &m)
+         capture: i64 = element_msg(click, .MOUSE, 0, &m)
          e.flags.capture_mouse = bool(capture)
          e.last_mouse = click
       }
@@ -1015,7 +1134,10 @@ handle_mouse :: proc(e: ^Element, m: Mouse)
    {
       m := m
       m.handled = false
-      handle_mouse_intern(e, e, &m)
+      if !element_ignored(e)
+      {
+         handle_mouse_intern(e, e, &m)
+      }
       /*
       click = element_by_point(e, m.pos)
       if e.last_mouse != nil && e.last_mouse != click
@@ -1062,6 +1184,8 @@ handle_mouse :: proc(e: ^Element, m: Mouse)
 
 window_close :: proc(win: ^Window)
 {
+   prof.SCOPED_EVENT(#procedure)
+
    event: sdl3.Event
    event.type = .WINDOW_CLOSE_REQUESTED
    event.window.windowID = sdl3.GetWindowID(win.sdl_window)
@@ -1069,6 +1193,8 @@ window_close :: proc(win: ^Window)
 
 overlay_clear :: proc(e: ^Element)
 {
+   prof.SCOPED_EVENT(#procedure)
+
    target, ok := sdl3.GetRenderTarget(e.window.sdl_renderer).?
    if !ok do target = nil
 
@@ -1093,11 +1219,15 @@ overlay_clear :: proc(e: ^Element)
 
 window_block :: proc(root: ^Window, blocking: ^Window)
 {
+   prof.SCOPED_EVENT(#procedure)
+
    root.blocking = blocking
 }
 
 textinput_start :: proc(e: ^Element)
 {
+   prof.SCOPED_EVENT(#procedure)
+
    if e == nil do return
 
    textinput_stop(e.window)
@@ -1109,6 +1239,8 @@ textinput_start :: proc(e: ^Element)
 
 textinput_stop :: proc(win: ^Window)
 {
+   prof.SCOPED_EVENT(#procedure)
+
    if win == nil do return
 
    if win.keyboard != nil
@@ -1121,17 +1253,19 @@ textinput_stop :: proc(win: ^Window)
 }
 
 @(private="file")
-window_msg :: proc(e: ^Element, msg: Msg, di: int, dp: rawptr) -> int
+window_msg :: proc(e: ^Element, msg: Msg, di: i64, dp: rawptr) -> i64
 {
+   prof.SCOPED_EVENT(#procedure)
+
    win: ^Window = &e.derived.(Window)
 
    if msg == .GET_WIDTH
    {
-      return int(win.width)
+      return i64(win.width)
    }
    else if msg == .GET_HEIGHT
    {
-      return int(win.height)
+      return i64(win.height)
    }
    else if msg == .DESTROY
    {
@@ -1149,6 +1283,8 @@ window_msg :: proc(e: ^Element, msg: Msg, di: int, dp: rawptr) -> int
 
 find_window :: proc(win: ^sdl3.Window) -> ^Window
 {
+   prof.SCOPED_EVENT(#procedure)
+
    if win == nil do return nil
 
    for i := 0; i < len(ctx.windows); i += 1
@@ -1161,8 +1297,60 @@ find_window :: proc(win: ^sdl3.Window) -> ^Window
 
 rect_inside :: proc(r: Rect, p: [2]i32) -> bool
 {
+   prof.SCOPED_EVENT(#procedure)
+
    if p.x < r.min.x || p.y < r.min.y do return false
    if p.x > r.max.x || p.y > r.max.y do return false
 
    return true
+}
+
+@(private)
+timer_callback :: proc "c" (userdata: rawptr, timer_id: sdl3.TimerID, interval: u64) -> u64
+{
+   e: ^Element = cast(^Element)userdata
+   event: sdl3.Event
+   event.type = sdl3.EventType(ctx.timer_event)
+   event.user.windowID = sdl3.GetWindowID(e.window.sdl_window)
+   event.user.data1 = e
+   res: bool = sdl3.PushEvent(&event)
+
+   return interval
+}
+
+@(private)
+open_file_callback :: proc "c" (userdata: rawptr, filelist: [^]cstring, filter: i32)
+{
+   dialog_ctx: ^DialogInternalCtx = cast(^DialogInternalCtx)userdata
+   context = dialog_ctx.ctx
+
+   filelist_len: i32 = 0
+   for filelist != nil
+   {
+      if filelist[filelist_len] == nil do break
+      filelist_len += 1
+   }
+
+   msg: ^OpenFileMsg = new(OpenFileMsg)
+   msg.ident = dialog_ctx.ident
+   msg.filter = filter
+   msg.file_list = make([]string, filelist_len)
+   for i in 0..<filelist_len
+   {
+      msg.file_list[i] = strings.clone_from_cstring(filelist[i])
+   }
+
+   event: sdl3.Event
+   event.type = sdl3.EventType(ctx.open_file_event)
+   event.user.windowID = sdl3.GetWindowID(dialog_ctx.window.sdl_window)
+   event.user.data1 = msg
+   res: bool = sdl3.PushEvent(&event)
+
+   for filter in dialog_ctx.filters
+   {
+      delete(filter.name)
+      delete(filter.pattern)
+   }
+   delete(dialog_ctx.filters)
+   free(dialog_ctx)
 }

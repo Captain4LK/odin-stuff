@@ -3,6 +3,8 @@ package gui
 import "core:log"
 import "vendor:sdl3"
 
+import "../prof"
+
 Group :: struct
 {
    using element: Element,
@@ -10,14 +12,18 @@ Group :: struct
 
 group_create :: proc(parent: ^Element, flags: ElementFlags) -> ^Group
 {
+   prof.SCOPED_EVENT(#procedure)
+
    group: ^Group = &element_create(Group, parent, flags, group_msg).derived.(Group)
 
    return group
 }
 
 @(private="file")
-group_msg :: proc(e: ^Element, msg: Msg, di: int, dp: rawptr) -> int
+group_msg :: proc(e: ^Element, msg: Msg, di: i64, dp: rawptr) -> i64
 {
+   prof.SCOPED_EVENT(#procedure)
+
    group: ^Group = &e.derived.(Group)
 
    if msg == .GET_WIDTH
@@ -26,11 +32,11 @@ group_msg :: proc(e: ^Element, msg: Msg, di: int, dp: rawptr) -> int
 
       if group.flags.style == 0
       {
-         return int(max(space[0], group.size_min[0]))
+         return i64(max(space[0], group.size_min[0]))
       }
       else if group.flags.style == 1
       {
-         return int(max(space[0], group.size_min[0])) + 2 * int(get_scale())
+         return i64(max(space[0], group.size_min[0])) + 2 * i64(get_scale())
       }
    }
    else if msg == .GET_HEIGHT
@@ -39,11 +45,11 @@ group_msg :: proc(e: ^Element, msg: Msg, di: int, dp: rawptr) -> int
 
       if group.flags.style == 0
       {
-         return int(max(space[0], group.size_min[1]))
+         return i64(max(space[0], group.size_min[1]))
       }
       else if group.flags.style == 1
       {
-         return int(max(space[0], group.size_min[1])) + 2 * int(get_scale())
+         return i64(max(space[0], group.size_min[1])) + 2 * i64(get_scale())
       }
    }
    else if msg == .GET_CHILD_PAD

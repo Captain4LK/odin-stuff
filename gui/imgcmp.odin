@@ -5,6 +5,8 @@ import "core:strings"
 import "core:fmt"
 import "vendor:sdl3"
 
+import "../prof"
+
 ImageComp :: struct
 {
    using element: Element,
@@ -29,14 +31,21 @@ ImageComp :: struct
 @(private="file")
 texture_from_data :: proc(w: ^Window, pix: []u8, width: i32, height: i32) -> ^sdl3.Texture
 {
+   prof.SCOPED_EVENT(#procedure)
+
    surface: ^sdl3.Surface = sdl3.CreateSurfaceFrom(width, height, .RGBA32, raw_data(pix), width * 4)
    defer sdl3.DestroySurface(surface)
-   return sdl3.CreateTextureFromSurface(w.sdl_renderer, surface)
+
+   tex: ^sdl3.Texture = sdl3.CreateTextureFromSurface(w.sdl_renderer, surface)
+   sdl3.SetTextureScaleMode(tex, .NEAREST)
+   return tex
 }
 
 imgcmp_create :: proc(parent: ^Element, flags: ElementFlags, pix0: []u8, width0: i32, height0: i32, 
    pix1: []u8, width1: i32, height1: i32) -> ^ImageComp
 {
+   prof.SCOPED_EVENT(#procedure)
+
    imgcmp: ^ImageComp = &element_create(ImageComp, parent, flags, imgcmp_msg).derived.(ImageComp)
 
    imgcmp.slider = 1024
@@ -55,6 +64,8 @@ imgcmp_create :: proc(parent: ^Element, flags: ElementFlags, pix0: []u8, width0:
 
 imgcmp_update0 :: proc(img: ^ImageComp, pix: []u8, width: i32, height: i32)
 {
+   prof.SCOPED_EVENT(#procedure)
+
    if img.img0 != nil
    {
       sdl3.DestroyTexture(img.img0)
@@ -69,6 +80,8 @@ imgcmp_update0 :: proc(img: ^ImageComp, pix: []u8, width: i32, height: i32)
 
 imgcmp_update1 :: proc(img: ^ImageComp, pix: []u8, width: i32, height: i32)
 {
+   prof.SCOPED_EVENT(#procedure)
+
    if img.img1 != nil
    {
       sdl3.DestroyTexture(img.img1)
@@ -82,17 +95,19 @@ imgcmp_update1 :: proc(img: ^ImageComp, pix: []u8, width: i32, height: i32)
 }
 
 @(private="file")
-imgcmp_msg :: proc(e: ^Element, msg: Msg, di: int, dp: rawptr) -> int
+imgcmp_msg :: proc(e: ^Element, msg: Msg, di: i64, dp: rawptr) -> i64
 {
+   prof.SCOPED_EVENT(#procedure)
+
    img: ^ImageComp = &e.derived.(ImageComp)
 
    if msg == .GET_WIDTH
    {
-      return int(img.width0 + 6 * get_scale())
+      return i64(6 * get_scale())
    }
    else if msg == .GET_HEIGHT
    {
-      return int(img.height0 + 6 * get_scale())
+      return i64(6 * get_scale())
    }
    else if msg == .MOUSE
    {
@@ -114,6 +129,8 @@ imgcmp_msg :: proc(e: ^Element, msg: Msg, di: int, dp: rawptr) -> int
             element_redraw(img)
          }
 
+         mouse.handled = true
+
          return 1
       }
 
@@ -128,6 +145,7 @@ imgcmp_msg :: proc(e: ^Element, msg: Msg, di: int, dp: rawptr) -> int
          img.y += y * scale_change
          img.scale += img.scale * 0.15
          redraw = true
+         mouse.handled = true
       }
       else if mouse.wheel < 0 && img.scale >= 0.1
       {
@@ -140,6 +158,7 @@ imgcmp_msg :: proc(e: ^Element, msg: Msg, di: int, dp: rawptr) -> int
          img.y += y * scale_change
          img.scale -= img.scale * 0.15
          redraw = true
+         mouse.handled = true
       }
 
       if card(mouse.button & {.MIDDLE}) > 0 &&
@@ -148,6 +167,7 @@ imgcmp_msg :: proc(e: ^Element, msg: Msg, di: int, dp: rawptr) -> int
          img.x += mouse.rel.x
          img.y += mouse.rel.y
          element_redraw(img)
+         mouse.handled = true
 
          return 1
       }
@@ -163,7 +183,7 @@ imgcmp_msg :: proc(e: ^Element, msg: Msg, di: int, dp: rawptr) -> int
    }
    else if msg == .BUTTON_DOWN
    {
-      scancode: int = di
+      scancode: i64 = di
 
       if sdl3.Scancode(scancode) == .BACKSPACE
       {
@@ -241,6 +261,8 @@ imgcmp_draw :: proc(img: ^ImageComp)
 @(private="file")
 imgcmp_update_view :: proc(img: ^ImageComp, reset: bool)
 {
+   prof.SCOPED_EVENT(#procedure)
+
    bounds: Rect = img.bounds
    scale: i32 = get_scale()
 

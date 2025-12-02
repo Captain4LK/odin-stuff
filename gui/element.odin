@@ -4,11 +4,15 @@ import "core:log"
 import "core:fmt"
 import "vendor:sdl3"
 
+import "../prof"
+
 @(private="file")
 id_next: u64 = 0
 
 element_create :: proc($T: typeid, parent: ^Element, flags: ElementFlags, msg_base: MsgHandler) -> ^Element
 {
+   prof.SCOPED_EVENT(#procedure)
+
    t := new(T)
    t.derived = t^
    t.flags = flags
@@ -35,8 +39,31 @@ element_create :: proc($T: typeid, parent: ^Element, flags: ElementFlags, msg_ba
    return t
 }
 
-element_msg :: proc(e: ^Element, msg: Msg, di: int, dp: rawptr) -> int
+element_msg_direct :: proc(e: ^Element, msg: Msg, di: i64, dp: rawptr) -> i64
 {
+   prof.SCOPED_EVENT(#procedure)
+
+   if e == nil do return 0
+   if e.flags.destroy && msg != .DESTROY do return 0
+
+   if msg == .DRAW && e.flags.invisible do return 0
+   if e.window.blocking != nil && (msg < .NO_BLOCK_START || msg > .NO_BLOCK_END) do return 0
+
+   if e.msg_user != nil
+   {
+      res: i64 = e.msg_user(e, msg, di, dp)
+      if res != 0 do return res
+   }
+
+   if e.msg_base != nil do return e.msg_base(e, msg, di, dp)
+
+   return 0
+}
+
+element_msg :: proc(e: ^Element, msg: Msg, di: i64, dp: rawptr) -> i64
+{
+   prof.SCOPED_EVENT(#procedure)
+
    if e == nil do return 0
    if e.flags.destroy && msg != .DESTROY do return 0
 
@@ -58,7 +85,7 @@ element_msg :: proc(e: ^Element, msg: Msg, di: int, dp: rawptr) -> int
 
    if e.msg_user != nil
    {
-      res: int = e.msg_user(e, msg, di, dp)
+      res: i64 = e.msg_user(e, msg, di, dp)
       if res != 0 do return res
    }
 
@@ -67,8 +94,10 @@ element_msg :: proc(e: ^Element, msg: Msg, di: int, dp: rawptr) -> int
    return 0
 }
 
-element_msg_all :: proc(e: ^Element, msg: Msg, di: int, dp: rawptr) -> int
+element_msg_all :: proc(e: ^Element, msg: Msg, di: i64, dp: rawptr) -> i64
 {
+   prof.SCOPED_EVENT(#procedure)
+
    if e == nil do return 0
    if e.flags.destroy && msg != .DESTROY do return 0
    if element_ignored(e) do return 0
@@ -86,6 +115,8 @@ element_msg_all :: proc(e: ^Element, msg: Msg, di: int, dp: rawptr) -> int
 
 element_redraw :: proc(e: ^Element)
 {
+   prof.SCOPED_EVENT(#procedure)
+
    if e.flags.overlay || e.flags.no_parent
    {
       element_redraw_now(e)
@@ -100,6 +131,8 @@ element_redraw :: proc(e: ^Element)
 @(private="file")
 element_redraw_now :: proc(e: ^Element)
 {
+   prof.SCOPED_EVENT(#procedure)
+
    if e.flags.overlay
    {
       res: bool = sdl3.SetRenderTarget(e.window.sdl_renderer, e.window.sdl_overlay)
@@ -112,7 +145,10 @@ element_redraw_now :: proc(e: ^Element)
    }
 
    //fmt.printf("Draw\n")
-   element_redraw_intern(e)
+   if !element_ignored(e)
+   {
+      element_redraw_intern(e)
+   }
 
    res: bool = sdl3.SetRenderTarget(e.window.sdl_renderer, nil)
    if !res do log.errorf("SetRenderTarget failed: %v", sdl3.GetError())
@@ -131,31 +167,22 @@ element_redraw_now :: proc(e: ^Element)
 
 element_redraw_msg :: proc(e: ^Element)
 {
+   prof.SCOPED_EVENT(#procedure)
+
    e.window.clip = {{-1, -1}, {-1, -1}}
    e.window.translation = {0, 0}
    draw_disable_clip(e)
-   element_redraw_intern(e)
-}
 
-element_layout :: proc(e: ^Element, space: Rect)
-{
-   element_calculate_width(e)
-   if !e.flags.overlay
+   if !element_ignored(e)
    {
-      element_calculate_grow_width(e, space.max - space.min)
+      element_redraw_intern(e)
    }
-   else
-   {
-      element_calculate_grow_width(e, {e.size.x, space.max.y - space.min.y})
-   }
-   element_calculate_height(e)
-   element_calculate_grow_height(e, space.max - space.min)
-   element_calculate_position(e, {space.min, space.min + e.size})
-   // TODO: for floating containers, given size is calculated size of e
 }
 
 element_by_point :: proc(e: ^Element, pt: [2]f32) -> ^Element
 {
+   prof.SCOPED_EVENT(#procedure)
+
    old_trans: [2]i32 = e.window.translation
    e.window.translation += e.translate
 
@@ -184,6 +211,8 @@ element_by_point :: proc(e: ^Element, pt: [2]f32) -> ^Element
 
 element_set_invisible :: proc(e: ^Element, invisible: bool)
 {
+   prof.SCOPED_EVENT(#procedure)
+
    e.flags.invisible = invisible
 
    for i := 0; i < len(e.children); i += 1
@@ -194,27 +223,62 @@ element_set_invisible :: proc(e: ^Element, invisible: bool)
 
 element_ignored :: proc(e: ^Element) -> bool
 {
+   prof.SCOPED_EVENT(#procedure)
+
    if e == nil do return false
    if e.flags.ignore do return true
-   return element_ignored(e.parent)
+
+   current: ^Element = e.parent
+   for current != nil
+   {
+      if current.flags.ignore do return true
+      current = current.parent
+   }
+
+   return false
+   //return element_ignored(e.parent)
 }
 
 element_destroy :: proc(e: ^Element)
 {
+   prof.SCOPED_EVENT(#procedure)
+
    for i := 0; i < len(e.children); i += 1
    {
       element_destroy(e.children[i])
    }
 
    element_msg(e, .DESTROY, 0, nil)
+   if e.timer != 0
+   {
+      res: bool = sdl3.RemoveTimer(e.timer)
+      if !res do log.errorf("RemoveTimer failed: %v", sdl3.GetError())
+   }
    delete(e.children)
    free(e)
+}
+
+element_timer :: proc(e: ^Element, interval: u64)
+{
+   prof.SCOPED_EVENT(#procedure)
+
+   if e.timer != 0
+   {
+      res: bool = sdl3.RemoveTimer(e.timer)
+      if !res do log.errorf("RemoveTimer failed: %v", sdl3.GetError())
+      e.timer = 0
+   }
+
+   e.timer_interval = interval
+   e.timer = sdl3.AddTimerNS(interval, timer_callback, e)
 }
 
 @(private="file")
 element_redraw_intern :: proc(e: ^Element)
 {
-   if e.flags.invisible || element_ignored(e) do return
+   prof.SCOPED_EVENT(#procedure)
+
+   if e.flags.invisible || e.flags.ignore do return
 
    element_msg(e, .DRAW, 0, nil)
 
@@ -249,264 +313,3 @@ element_redraw_intern :: proc(e: ^Element)
    e.window.translation = old_trans
 }
 
-@(private="file",rodata)
-layout_axes: [Layout][2]int = {.VERTICAL= {1,0}, .HORIZONTAL = {0,1}}
-
-@(private="file")
-element_calculate_width :: proc(e: ^Element)
-{
-   major: int = layout_axes[e.flags.layout][0]
-   minor: int = layout_axes[e.flags.layout][1]
-   size: [2]i32
-
-   e.size = {0, 0}
-
-   for child in e.children
-   {
-      element_calculate_width(child)
-
-      size[major] += child.size[major]
-      size[minor] = max(child.size[minor], size[minor])
-   }
-
-   size += e.pad[0] + e.pad[1]
-   size[minor] += e.child_gap * i32(len(e.children) - 1)
-   space: [2]i32 = {size[0], 0}
-   e.size[0] = i32(element_msg(e, .GET_WIDTH, 0, &space))
-}
-
-@(private="file")
-element_calculate_height :: proc(e: ^Element)
-{
-   major: int = layout_axes[e.flags.layout][0]
-   minor: int = layout_axes[e.flags.layout][1]
-   size: [2]i32
-
-   for child in e.children
-   {
-      element_calculate_height(child)
-
-      size[major] += child.size[major]
-      size[minor] = max(child.size[minor], size[minor])
-   }
-
-   size += e.pad[0] + e.pad[1]
-   size[minor] += e.child_gap * i32(len(e.children) - 1)
-   space: [2]i32 = {size[1], e.size[0]}
-   e.size[1] = i32(element_msg(e, .GET_HEIGHT, 0, &space))
-}
-
-element_calculate_grow_width :: proc(e: ^Element, available: [2]i32)
-{
-   major: int = layout_axes[e.flags.layout][0]
-   minor: int = layout_axes[e.flags.layout][1]
-
-   child_pad: [2][2]i32
-   element_msg(e, .GET_CHILD_PAD, 0, &child_pad)
-
-   available := available
-   available -= e.pad[0] + e.pad[1] + child_pad[0] + child_pad[1]
-
-   for child in e.children
-   {
-      available[major] -= child.size[major]
-   }
-   available[major] -= e.child_gap * i32(len(e.children) - 1)
-
-   // Expand against layout direction
-   for child in e.children
-   {
-      fill: [2]bool = {child.flags.fill_x, child.flags.fill_y}
-      if fill[minor] && minor == 0 do child.size[minor] = available[minor]
-   }
-
-   // Expand in layouting direction
-   remaining: i32 = available[major]
-   for remaining > 0
-   {
-      smallest: i32 = max(i32)
-      second_smallest: i32 = max(i32)
-      to_add: i32 = remaining
-      if major != 0 do break
-
-      for child in e.children
-      {
-         size: i32 = child.size[major]
-         fill: [2]bool = {child.flags.fill_x, child.flags.fill_y}
-         if !fill[major] do continue
-
-         if size < smallest
-         {
-            second_smallest = smallest
-            smallest = size
-         }
-
-         if size > smallest
-         {
-            second_smallest = min(second_smallest, size)
-         }
-      }
-
-      if second_smallest != max(i32)
-      {
-         to_add = second_smallest - smallest
-      }
-      to_add = min(remaining, to_add)
-
-      num_to_add: int = 0
-      for child in e.children
-      {
-         size: i32 = child.size[major]
-         fill: [2]bool = {child.flags.fill_x, child.flags.fill_y}
-         if !fill[major] do continue
-
-         if size == smallest do num_to_add += 1
-      }
-
-      if num_to_add == 0 do break
-
-      cur: int = 0
-      rem: int = int(to_add) % num_to_add
-      for child in e.children
-      {
-         size: i32 = child.size[major]
-         fill: [2]bool = {child.flags.fill_x, child.flags.fill_y}
-         if !fill[major] do continue
-
-         if size != smallest do continue
-
-         add: i32 = to_add / i32(num_to_add)
-         if cur < rem do add += 1
-         child.size[major] += add
-         remaining -= add
-         cur += 1
-      }
-   }
-
-   // Children
-   for child in e.children
-   {
-      element_calculate_grow_width(child, child.size)
-   }
-}
-
-element_calculate_grow_height:: proc(e: ^Element, available: [2]i32)
-{
-   major: int = layout_axes[e.flags.layout][0]
-   minor: int = layout_axes[e.flags.layout][1]
-
-   child_pad: [2][2]i32
-   element_msg(e, .GET_CHILD_PAD, 0, &child_pad)
-
-   available := available
-   available -= e.pad[0] + e.pad[1] + child_pad[0] + child_pad[1]
-
-   for child in e.children
-   {
-      available[major] -= child.size[major]
-   }
-   available[major] -= e.child_gap * i32(len(e.children) - 1)
-
-   // Expand against layout direction
-   for child in e.children
-   {
-      fill: [2]bool = {child.flags.fill_x, child.flags.fill_y}
-      if fill[minor] && minor == 1 do child.size[minor] = available[minor]
-   }
-
-   // Expand in layouting direction
-   remaining: i32 = available[major]
-   for remaining > 0
-   {
-      smallest: i32 = max(i32)
-      second_smallest: i32 = max(i32)
-      to_add: i32 = remaining
-      if major != 1 do break
-
-      for child in e.children
-      {
-         size: i32 = child.size[major]
-         fill: [2]bool = {child.flags.fill_x, child.flags.fill_y}
-         if !fill[major] do continue
-
-         if size < smallest
-         {
-            second_smallest = smallest
-            smallest = size
-         }
-
-         if size > smallest
-         {
-            second_smallest = min(second_smallest, size)
-         }
-      }
-
-      if second_smallest != max(i32)
-      {
-         to_add = second_smallest - smallest
-      }
-      to_add = min(remaining, to_add)
-
-      num_to_add: int = 0
-      for child in e.children
-      {
-         size: i32 = child.size[major]
-         fill: [2]bool = {child.flags.fill_x, child.flags.fill_y}
-         if !fill[major] do continue
-
-         if size == smallest do num_to_add += 1
-      }
-
-      if num_to_add == 0 do break
-
-      cur: int = 0
-      rem: int = int(to_add) % num_to_add
-      for child in e.children
-      {
-         size: i32 = child.size[major]
-         fill: [2]bool = {child.flags.fill_x, child.flags.fill_y}
-         if !fill[major] do continue
-
-         if size != smallest do continue
-
-         add: i32 = to_add / i32(num_to_add)
-         if cur < rem do add += 1
-         child.size[major] += add
-         remaining -= add
-         cur += 1
-      }
-   }
-
-   // Children
-   for child in e.children
-   {
-      element_calculate_grow_height(child, child.size)
-   }
-}
-
-@(private="file")
-element_calculate_position :: proc(e: ^Element, available: Rect)
-{
-   e.bounds = available
-   e.size_children = {0, 0}
-   major: int = layout_axes[e.flags.layout][0]
-   minor: int = layout_axes[e.flags.layout][1]
-
-   child_pad: [2][2]i32
-   element_msg(e, .GET_CHILD_PAD, 0, &child_pad)
-
-   child_space: Rect = e.bounds
-   child_space.min += e.pad[0] + child_pad[0]
-   child_space.max -= e.pad[1] + child_pad[1]
-   for child in e.children
-   {
-      if element_ignored(child) do continue
-
-      element_calculate_position(child, {child_space.min, child_space.min + child.size})
-      child_space.min[major] += child.size[major]
-      child_space.min[major] += e.child_gap
-
-      e.size_children[major] += child.size[major] + e.child_gap
-      e.size_children[minor] = max(e.size_children[minor], child.size[minor])
-   }
-}

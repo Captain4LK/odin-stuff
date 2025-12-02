@@ -5,6 +5,8 @@ import "core:strings"
 import "core:fmt"
 import "vendor:sdl3"
 
+import "../prof"
+
 DropDown :: struct
 {
    using element: Element,
@@ -19,6 +21,8 @@ menubar_create :: proc(parent: ^Element, flags: ElementFlags,
                        cflags: ElementFlags, labels: []string, 
                        panels: []^Element, msg_usr: MsgHandler) -> ^Group
 {
+   prof.SCOPED_EVENT(#procedure)
+
    group: ^Group = group_create(parent, flags)
 
    side: b32 = false
@@ -37,18 +41,34 @@ menubar_create :: proc(parent: ^Element, flags: ElementFlags,
    return group
 }
 
-@(private="file")
-dropdown_msg :: proc(e: ^Element, msg: Msg, di: int, dp: rawptr) -> int
+menubar_label_set :: proc(bar: ^Group, label: string, which: i32)
 {
+   if bar == nil do return
+
+   if which < 0 || int(which) >= len(bar.children)
+   {
+      return
+   }
+
+   drop: ^DropDown = &bar.children[which].derived.(DropDown)
+   delete(drop.text)
+   drop.text = strings.clone(label)
+}
+
+@(private="file")
+dropdown_msg :: proc(e: ^Element, msg: Msg, di: i64, dp: rawptr) -> i64
+{
+   prof.SCOPED_EVENT(#procedure)
+
    drop: ^DropDown = &e.derived.(DropDown)
 
    if msg == .GET_WIDTH
    {
-      return len(drop.text) * int(GLYPH_WIDTH * get_scale()) + int(10 * get_scale())
+      return i64(len(drop.text)) * i64(GLYPH_WIDTH * get_scale()) + i64(10 * get_scale())
    }
    else if msg == .GET_HEIGHT
    {
-      return int(GLYPH_HEIGHT * get_scale()) + int(8 * get_scale())
+      return i64(GLYPH_HEIGHT * get_scale()) + i64(8 * get_scale())
    }
    else if msg == .MOUSE
    {
@@ -173,7 +193,7 @@ dropdown_msg :: proc(e: ^Element, msg: Msg, di: int, dp: rawptr) -> int
 
       mouse.handled = true
 
-      return int(drop.state > 0)
+      return i64(drop.state > 0)
    }
    else if msg == .DESTROY
    {
@@ -192,15 +212,50 @@ dropdown_msg :: proc(e: ^Element, msg: Msg, di: int, dp: rawptr) -> int
 dropdown_draw :: proc(drop: ^DropDown)
 {
    bounds: Rect = drop.bounds
+   scale: i32 = get_scale()
 
-   if drop.state != 0
+   if drop.flags.style == 0
    {
-      draw_rectangle_fill(drop, bounds, {50, 50, 50, 255})
+      draw_rectangle_fill(drop, {bounds.min + scale, bounds.max - scale}, {90, 90, 90, 255})
+      draw_rectangle(drop, bounds, {0, 0, 0, 255})
+
+      if drop.state != 0
+      {
+         draw_rectangle_fill(drop, {{bounds.min[0] + scale, bounds.min[1] + 2 * scale},
+            {bounds.min[0] + 2 * scale, bounds.max[1] - 2 * scale}}, {0, 0, 0, 255})
+         draw_rectangle_fill(drop, {{bounds.min[0] + scale, bounds.max[1] - 2 * scale},
+            {bounds.max[0] - 2 * scale, bounds.max[1] - scale}}, {0, 0, 0, 255})
+         draw_rectangle_fill(drop, {{bounds.max[0] - 2 * scale, bounds.min[1] + 2 * scale},
+            {bounds.max[0] - scale, bounds.max[1] - 2 * scale}}, {50, 50, 50, 255})
+         draw_rectangle_fill(drop, {{bounds.min[0] + 2 * scale, bounds.min[1] + scale},
+            {bounds.max[0] - scale, bounds.min[1] + 2 * scale}}, {50, 50, 50, 255})
+      }
+      else
+      {
+         draw_rectangle_fill(drop, {{bounds.min[0] + scale, bounds.min[1] + 2 * scale},
+            {bounds.min[0] + 2 * scale, bounds.max[1] - 2 * scale}}, {50, 50, 50, 255})
+         draw_rectangle_fill(drop, {{bounds.min[0] + scale, bounds.max[1] - 2 * scale},
+            {bounds.max[0] - 2 * scale, bounds.max[1] - scale}}, {50, 50, 50, 255})
+         draw_rectangle_fill(drop, {{bounds.max[0] - 2 * scale, bounds.min[1] + 2 * scale},
+            {bounds.max[0] - scale, bounds.max[1] - 2 * scale}}, {200, 200, 200, 255})
+         draw_rectangle_fill(drop, {{bounds.min[0] + 2 * scale, bounds.min[1] + scale},
+            {bounds.max[0] - scale, bounds.min[1] + 2 * scale}}, {200, 200, 200, 255})
+      }
+
+      draw_label(drop, bounds, drop.text, {0, 0, 0, 255}, true)
    }
    else
    {
-      draw_rectangle_fill(drop, bounds, {90, 90, 90, 255})
-   }
 
-   draw_label(drop, bounds, drop.text, {0, 0, 0, 255}, true)
+      if drop.state != 0
+      {
+         draw_rectangle_fill(drop, bounds, {50, 50, 50, 255})
+      }
+      else
+      {
+         draw_rectangle_fill(drop, bounds, {90, 90, 90, 255})
+      }
+
+      draw_label(drop, bounds, drop.text, {0, 0, 0, 255}, true)
+   }
 }

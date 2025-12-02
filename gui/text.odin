@@ -4,6 +4,8 @@ import "core:log"
 import "core:strings"
 import "vendor:sdl3"
 
+import "../prof"
+
 Text :: struct
 {
    using element: Element,
@@ -14,6 +16,8 @@ Text :: struct
 
 text_create :: proc(parent: ^Element, flags: ElementFlags, str: string) -> ^Text
 {
+   prof.SCOPED_EVENT(#procedure)
+
    text: ^Text = &element_create(Text, parent, flags, text_msg).derived.(Text)
    text.text = strings.clone(str)
    text.width_min = text_width_min(text)
@@ -23,18 +27,20 @@ text_create :: proc(parent: ^Element, flags: ElementFlags, str: string) -> ^Text
 }
 
 @(private="file")
-text_msg :: proc(e: ^Element, msg: Msg, di: int, dp: rawptr) -> int
+text_msg :: proc(e: ^Element, msg: Msg, di: i64, dp: rawptr) -> i64
 {
+   prof.SCOPED_EVENT(#procedure)
+
    text: ^Text = &e.derived.(Text)
 
    if msg == .GET_WIDTH
    {
-      return int(max(text.size_min[0], text.width_min * GLYPH_WIDTH * get_scale()))
+      return i64(max(text.size_min[0], text.width_min * GLYPH_WIDTH * get_scale()))
    }
    else if msg == .GET_HEIGHT
    {
       space: ^[2]i32 = cast(^[2]i32)dp
-      return int(max(text.size_min[0], text_height_by_width(text, space[1])))
+      return i64(max(text.size_min[0], text_height_by_width(text, space[1])))
    }
    else if msg == .DRAW
    {
@@ -67,6 +73,8 @@ text_draw :: proc(text: ^Text)
 @(private="file")
 text_width_min:: proc(text: ^Text) -> i32
 {
+   prof.SCOPED_EVENT(#procedure)
+
    width_min: i32 = 0
    width: i32 = 0
    for i in 0..<len(text.text)
@@ -91,6 +99,8 @@ text_width_min:: proc(text: ^Text) -> i32
 @(private="file")
 text_height_by_width :: proc(text: ^Text, width: i32) -> i32
 {
+   prof.SCOPED_EVENT(#procedure)
+
    scale: i32 = get_scale()
    pos: [2]i32
    for i in 0..<len(text.text)

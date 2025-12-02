@@ -4,6 +4,8 @@ import "core:log"
 import "core:strings"
 import "vendor:sdl3"
 
+import "../prof"
+
 Slider :: struct
 {
    using element: Element,
@@ -15,6 +17,8 @@ Slider :: struct
 
 slider_create :: proc(parent: ^Element, flags: ElementFlags, direction: i32) -> ^Slider
 {
+   prof.SCOPED_EVENT(#procedure)
+
    slider: ^Slider = &element_create(Slider, parent, flags, slider_msg).derived.(Slider)
    slider.direction = direction
    slider.range = 100
@@ -25,6 +29,8 @@ slider_create :: proc(parent: ^Element, flags: ElementFlags, direction: i32) -> 
 
 slider_set :: proc(slider: ^Slider, value: i32, range: i32, trigger_msg: bool)
 {
+   prof.SCOPED_EVENT(#procedure)
+
    if slider == nil do return
 
    if slider.value != value || slider.range != range
@@ -39,17 +45,19 @@ slider_set :: proc(slider: ^Slider, value: i32, range: i32, trigger_msg: bool)
 }
 
 @(private="file")
-slider_msg :: proc(e: ^Element, msg: Msg, di: int, dp: rawptr) -> int
+slider_msg :: proc(e: ^Element, msg: Msg, di: i64, dp: rawptr) -> i64
 {
+   prof.SCOPED_EVENT(#procedure)
+
    slider: ^Slider = &e.derived.(Slider)
 
    if msg == .GET_WIDTH
    {
-      return int(GLYPH_HEIGHT * get_scale() + 8 * get_scale())
+      return i64(GLYPH_HEIGHT * get_scale() + 8 * get_scale())
    }
    else if msg == .GET_HEIGHT
    {
-      return int(GLYPH_HEIGHT * get_scale() + 8 * get_scale())
+      return i64(GLYPH_HEIGHT * get_scale() + 8 * get_scale())
    }
    else if msg == .DRAW
    {

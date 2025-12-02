@@ -4,6 +4,8 @@ import "core:log"
 import "core:fmt"
 import "vendor:sdl3"
 
+import "../prof"
+
 ScrollGroup :: struct
 {
    using element: Element,
@@ -33,10 +35,13 @@ SGBar :: struct
 
 scroll_group_set :: proc(sg: ^ScrollGroup, scroll: i32)
 {
+   prof.SCOPED_EVENT(#procedure)
+
    scroll_min: i32 = 0
-   scroll_max: i32 = sg.size_children[1] - (sg.bounds.max[1] - sg.bounds.min[1])
+   scroll_max: i32 = max(0, sg.size_children[1] - (sg.bounds.max[1] - sg.bounds.min[1]))
 
    sg.translate[1] = -min(scroll_max, max(scroll_min, -scroll))
+   //fmt.printf("%v %v %v\n", sg.translate[1], scroll_max, sg.size_children[1])
          //progress: f64 = f64(-sgbar.sg.translate[1]) / f64(sgbar.sg.size_children[1] - 
                       //(sgbar.sg.bounds.max[1] - sgbar.sg.bounds.min[1]))
    element_redraw(sg)
@@ -44,6 +49,8 @@ scroll_group_set :: proc(sg: ^ScrollGroup, scroll: i32)
 
 scroll_group_create :: proc(parent: ^Element, flags: ElementFlags) -> ^ScrollGroup
 {
+   prof.SCOPED_EVENT(#procedure)
+
    root: ^SGGroup = sggroup_create(parent, flags)
    scroll_group: ^ScrollGroup = &element_create(ScrollGroup, root, {fill_x = true, fill_y = true, clip = true}, scroll_group_msg).derived.(ScrollGroup)
    bg: ^SGGroup = sggroup_create(root, {fill_y = true})
@@ -61,8 +68,10 @@ scroll_group_create :: proc(parent: ^Element, flags: ElementFlags) -> ^ScrollGro
 }
 
 @(private="file")
-scroll_group_msg :: proc(e: ^Element, msg: Msg, di: int, dp: rawptr) -> int
+scroll_group_msg :: proc(e: ^Element, msg: Msg, di: i64, dp: rawptr) -> i64
 {
+   prof.SCOPED_EVENT(#procedure)
+
    scroll_group: ^ScrollGroup = &e.derived.(ScrollGroup)
 
    if msg == .MOUSE
@@ -78,14 +87,14 @@ scroll_group_msg :: proc(e: ^Element, msg: Msg, di: int, dp: rawptr) -> int
    else if msg == .GET_WIDTH
    {
       space: ^[2]i32 = cast(^[2]i32)dp
-      return int(scroll_group.size_min[0])
+      return i64(scroll_group.size_min[0])
       //return int(max(space[0], scroll_group.size_min[0]))
    }
    else if msg == .GET_HEIGHT
    {
       space: ^[2]i32 = cast(^[2]i32)dp
       //return int(max(space[0], scroll_group.size_min[1]))
-      return int(scroll_group.size_min[1])
+      return i64(scroll_group.size_min[1])
    }
    else if msg == .DRAW
    {
@@ -113,6 +122,8 @@ scroll_group_draw :: proc(scroll_group: ^ScrollGroup)
 @(private="file")
 sggroup_create :: proc(parent: ^Element, flags: ElementFlags) -> ^SGGroup
 {
+   prof.SCOPED_EVENT(#procedure)
+
    sggroup: ^SGGroup = &element_create(SGGroup, parent, flags, sggroup_msg).derived.(SGGroup)
 
    return sggroup
@@ -120,19 +131,21 @@ sggroup_create :: proc(parent: ^Element, flags: ElementFlags) -> ^SGGroup
 
 
 @(private="file")
-sggroup_msg :: proc(e: ^Element, msg: Msg, di: int, dp: rawptr) -> int
+sggroup_msg :: proc(e: ^Element, msg: Msg, di: i64, dp: rawptr) -> i64
 {
+   prof.SCOPED_EVENT(#procedure)
+
    sggroup: ^SGGroup = &e.derived.(SGGroup)
 
    if msg == .GET_WIDTH
    {
       space: ^[2]i32 = cast(^[2]i32)dp
-      return int(max(space[0], sggroup.size_min[0]))
+      return i64(max(space[0], sggroup.size_min[0]))
    }
    else if msg == .GET_HEIGHT
    {
       space: ^[2]i32 = cast(^[2]i32)dp
-      return int(max(space[0], sggroup.size_min[1]))
+      return i64(max(space[0], sggroup.size_min[1]))
    }
    else if msg == .DRAW
    {
@@ -147,6 +160,8 @@ sggroup_msg :: proc(e: ^Element, msg: Msg, di: int, dp: rawptr) -> int
 @(private="file")
 sgbutton_create :: proc(parent: ^Element, flags: ElementFlags) -> ^SGButton
 {
+   prof.SCOPED_EVENT(#procedure)
+
    sgbutton: ^SGButton = &element_create(SGButton, parent, flags, sgbutton_msg).derived.(SGButton)
    //sgbutton.text = strings.clone(str)
 
@@ -154,17 +169,19 @@ sgbutton_create :: proc(parent: ^Element, flags: ElementFlags) -> ^SGButton
 }
 
 @(private="file")
-sgbutton_msg :: proc(e: ^Element, msg: Msg, di: int, dp: rawptr) -> int
+sgbutton_msg :: proc(e: ^Element, msg: Msg, di: i64, dp: rawptr) -> i64
 {
+   prof.SCOPED_EVENT(#procedure)
+
    sgbutton: ^SGButton = &e.derived.(SGButton)
 
    if msg == .GET_WIDTH
    {
-      return 1 * int(GLYPH_WIDTH * get_scale()) + int(10 * get_scale())
+      return 1 * i64(GLYPH_WIDTH * get_scale()) + i64(10 * get_scale())
    }
    else if msg == .GET_HEIGHT
    {
-      return int(GLYPH_HEIGHT * get_scale()) + int(8 * get_scale())
+      return i64(GLYPH_HEIGHT * get_scale()) + i64(8 * get_scale())
    }
    else if msg == .MOUSE_LEAVE
    {
@@ -264,6 +281,8 @@ sgbutton_draw :: proc(sgbutton: ^SGButton)
 @(private="file")
 sgbar_create :: proc(parent: ^Element, flags: ElementFlags) -> ^SGBar
 {
+   prof.SCOPED_EVENT(#procedure)
+
    sgbar: ^SGBar = &element_create(SGBar, parent, flags, sgbar_msg).derived.(SGBar)
 
    return sgbar
@@ -271,19 +290,21 @@ sgbar_create :: proc(parent: ^Element, flags: ElementFlags) -> ^SGBar
 
 
 @(private="file")
-sgbar_msg :: proc(e: ^Element, msg: Msg, di: int, dp: rawptr) -> int
+sgbar_msg :: proc(e: ^Element, msg: Msg, di: i64, dp: rawptr) -> i64
 {
+   prof.SCOPED_EVENT(#procedure)
+
    sgbar: ^SGBar = &e.derived.(SGBar)
 
    if msg == .GET_WIDTH
    {
       space: ^[2]i32 = cast(^[2]i32)dp
-      return int(max(space[0], sgbar.size_min[0]))
+      return i64(max(space[0], sgbar.size_min[0]))
    }
    else if msg == .GET_HEIGHT
    {
       space: ^[2]i32 = cast(^[2]i32)dp
-      return int(max(space[0], sgbar.size_min[1]))
+      return i64(max(space[0], sgbar.size_min[1]))
    }
    else if msg == .DRAW
    {

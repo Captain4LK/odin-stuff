@@ -5,6 +5,8 @@ import "core:strings"
 import "core:fmt"
 import "vendor:sdl3"
 
+import "../prof"
+
 Entry :: struct
 {
    using element: Element,
@@ -17,24 +19,39 @@ Entry :: struct
 
 entry_create :: proc(parent: ^Element, flags: ElementFlags, len_max: i32) -> ^Entry
 {
+   prof.SCOPED_EVENT(#procedure)
+
    entry: ^Entry= &element_create(Entry, parent, flags, entry_msg).derived.(Entry)
    entry.len_max = len_max
 
    return entry 
 }
 
-@(private="file")
-entry_msg :: proc(e: ^Element, msg: Msg, di: int, dp: rawptr) -> int
+entry_set :: proc(entry: ^Entry, text: string)
 {
+   prof.SCOPED_EVENT(#procedure)
+
+   if entry == nil do return
+   if strings.compare(transmute(string)entry.entry[:], text) == 0 do return
+
+   clear(&entry.entry)
+   append(&entry.entry, ..transmute([]u8)text)
+}
+
+@(private="file")
+entry_msg :: proc(e: ^Element, msg: Msg, di: i64, dp: rawptr) -> i64
+{
+   prof.SCOPED_EVENT(#procedure)
+
    entry: ^Entry = &e.derived.(Entry)
 
    if msg == .GET_WIDTH
    {
-      return int(entry.len_max * GLYPH_WIDTH * get_scale() + 12 * get_scale())
+      return i64(entry.len_max * GLYPH_WIDTH * get_scale() + 12 * get_scale())
    }
    else if msg == .GET_HEIGHT
    {
-      return int(GLYPH_HEIGHT * get_scale() + 10 * get_scale())
+      return i64(GLYPH_HEIGHT * get_scale() + 10 * get_scale())
    }
    else if msg == .MOUSE_LEAVE
    {

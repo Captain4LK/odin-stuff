@@ -4,6 +4,8 @@ import "core:log"
 import "core:strings"
 import "vendor:sdl3"
 
+import "../prof"
+
 RadioButton :: struct
 {
    using element: Element,
@@ -15,6 +17,8 @@ RadioButton :: struct
 
 radiobutton_create :: proc(parent: ^Element, flags: ElementFlags, str: string) -> ^RadioButton
 {
+   prof.SCOPED_EVENT(#procedure)
+
    button: ^RadioButton = &element_create(RadioButton, parent, flags, radiobutton_msg).derived.(RadioButton)
    button.text = strings.clone(str)
 
@@ -25,6 +29,8 @@ radiobutton_create :: proc(parent: ^Element, flags: ElementFlags, str: string) -
 
 radiobutton_set :: proc(button: ^RadioButton, trigger_msg: bool, redraw: bool)
 {
+   prof.SCOPED_EVENT(#procedure)
+
    if button == nil do return
 
    previously: bool = button.checked
@@ -64,17 +70,19 @@ radiobutton_set :: proc(button: ^RadioButton, trigger_msg: bool, redraw: bool)
 }
 
 @(private="file")
-radiobutton_msg :: proc(e: ^Element, msg: Msg, di: int, dp: rawptr) -> int
+radiobutton_msg :: proc(e: ^Element, msg: Msg, di: i64, dp: rawptr) -> i64
 {
+   prof.SCOPED_EVENT(#procedure)
+
    button: ^RadioButton = &e.derived.(RadioButton)
 
    if msg == .GET_WIDTH
    {
-      return (GLYPH_HEIGHT + 8) * int(get_scale()) + len(button.text) * int(GLYPH_WIDTH * get_scale()) + int(10 * get_scale())
+      return (GLYPH_HEIGHT + 8) * i64(get_scale()) + i64(len(button.text)) * i64(GLYPH_WIDTH * get_scale()) + i64(10 * get_scale())
    }
    else if msg == .GET_HEIGHT
    {
-      return int(GLYPH_HEIGHT * get_scale()) + int(8 * get_scale())
+      return i64(GLYPH_HEIGHT * get_scale()) + i64(8 * get_scale())
    }
    else if msg == .MOUSE_LEAVE
    {
@@ -222,6 +230,37 @@ radiobutton_draw :: proc(button: ^RadioButton)
    }
    else if button.flags.style == 1
    {
+      if button.state
+      {
+         draw_rectangle_fill(button, bounds, {50, 50, 50, 255})
+      }
+      else
+      {
+         draw_rectangle_fill(button, bounds, {90, 90, 90, 255})
+      }
+
+      // Checkbox
+      height: i32 = bounds.max.y - bounds.min.y
+      dim: i32 = GLYPH_HEIGHT * scale
+      offset: i32 = (height - dim) / 2
+
+      draw_rectangle_fill(button, {{bounds.min.x + offset + scale, bounds.min.y + offset + scale}, 
+         {bounds.min.x + offset + 2 * scale, bounds.max.y - offset}}, {200, 200, 200, 255})
+      draw_rectangle_fill(button, {{bounds.min.x + offset + scale, bounds.max.y - offset - scale}, 
+         {bounds.min.x + offset + dim, bounds.max.y - offset}}, {200, 200, 200, 255})
+
+      draw_rectangle_fill(button, {{bounds.min.x + offset + 2 * scale, bounds.min.y + offset}, 
+         {bounds.min.x + offset + dim + scale, bounds.min.y + offset + scale}}, {50, 50, 50, 255})
+      draw_rectangle_fill(button, {{bounds.min.x + dim + offset, bounds.min.y + offset + scale}, 
+         {bounds.min.x + offset + dim + scale, bounds.max.y - offset - scale}}, {50, 50, 50, 255})
+
+      draw_label(button, {{bounds.min.x + dim + 2 * scale, bounds.min.y}, bounds.max}, button.text, {0, 0, 0, 255}, true)
+
+      if button.checked
+      {
+         draw_rectangle_fill(button, {{bounds.min[0] + offset + 4 * scale, bounds.min[1] + offset + 3 * scale},
+            {bounds.min[0] + dim + offset - 2 * scale, bounds.min[1] + offset + dim - 3 * scale}}, {0, 0, 0, 255})
+      }
    }
    else if button.flags.style == 2
    {
