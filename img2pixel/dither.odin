@@ -3,6 +3,7 @@ package main
 import "core:log"
 import "core:container/bit_array"
 import "core:mem"
+import "core:fmt"
 import "core:slice"
 import "core:math"
 import "core:math/linalg"
@@ -119,7 +120,7 @@ dither_threshold :: proc(img: ^Image64, dim: u32, threshold: []f32, palette: [25
    out.colour_count = u32(conf.colour_count)
    for i in 0..<conf.colour_count
    {
-      out.palette = conf.palette[i]
+      out.palette[i] = conf.palette[i]
    }
 
    for y in 0..<img.height
@@ -130,9 +131,9 @@ dither_threshold :: proc(img: ^Image64, dim: u32, threshold: []f32, palette: [25
          mod: u8 = u8((1 << dim) - 1)
          threshold_id: u8 = u8(((u32(y) & u32(mod)) << dim) + (u32(x) & u32(mod)))
 
-         p[0] = max(0, min(u16(max(i16)), u16(f32(p[0]) + (32767 * conf.dither_amount / 8) * (threshold[threshold_id] - 0.5))))
-         p[1] = max(0, min(u16(max(i16)), u16(f32(p[1]) + (32767 * conf.dither_amount / 8) * (threshold[threshold_id] - 0.5))))
-         p[2] = max(0, min(u16(max(i16)), u16(f32(p[2]) + (32767 * conf.dither_amount / 8) * (threshold[threshold_id] - 0.5))))
+         p[0] = u16(max(0, min(i32(max(i16)), i32(f32(p[0]) + (32767 * conf.dither_amount / 8) * (threshold[threshold_id] - 0.5)))))
+         p[1] = u16(max(0, min(i32(max(i16)), i32(f32(p[1]) + (32767 * conf.dither_amount / 8) * (threshold[threshold_id] - 0.5)))))
+         p[2] = u16(max(0, min(i32(max(i16)), i32(f32(p[2]) + (32767 * conf.dither_amount / 8) * (threshold[threshold_id] - 0.5)))))
 
          if i32(p[3] / 128) < conf.alpha_threshold
          {
@@ -159,7 +160,7 @@ dither_floyd :: proc(img: ^Image64, palette: [256][3]f32, conf: ^Config) -> (^Im
    out.colour_count = u32(conf.colour_count)
    for i in 0..<conf.colour_count
    {
-      out.palette = conf.palette[i]
+      out.palette[i] = conf.palette[i]
    }
 
    dup: ^Image64 = image64_dup(img)
@@ -207,7 +208,7 @@ dither_floyd2 :: proc(img: ^Image64, palette: [256][3]f32, conf: ^Config) -> (^I
    out.colour_count = u32(conf.colour_count)
    for i in 0..<conf.colour_count
    {
-      out.palette = conf.palette[i]
+      out.palette[i] = conf.palette[i]
    }
 
    dup: ^Image64 = image64_dup(img)
@@ -255,15 +256,15 @@ floyd_apply_error :: proc(img: ^Image64, err: [3]f32, x: i32, y: i32) #no_bounds
    if y < 0 || y >= img.height do return
 
    p: [4]u16 = img.data[y * img.width + x]
-   p[0] = max(0, min(u16(max(i16)), u16(f32(p[0]) + err[0] * 128)))
-   p[1] = max(0, min(u16(max(i16)), u16(f32(p[1]) + err[1] * 128)))
-   p[2] = max(0, min(u16(max(i16)), u16(f32(p[2]) + err[2] * 128)))
+   p[0] = u16(max(0, min(i32(max(i16)), i32(f32(p[0]) + err[0] * 128))))
+   p[1] = u16(max(0, min(i32(max(i16)), i32(f32(p[1]) + err[1] * 128))))
+   p[2] = u16(max(0, min(i32(max(i16)), i32(f32(p[2]) + err[2] * 128))))
 
    img.data[y * img.width + x] = p
 }
 
 @(private="file")
-assign_median :: proc(img: ^Image64, palette: [256][3]f32, conf: ^Config) -> (^Image32, ^Image8) #no_bounds_check
+assign_median :: proc(img: ^Image64, palette: [256][3]f32, conf: ^Config) -> (^Image32, ^Image8)
 {
    prof.SCOPED_EVENT(#procedure)
 
@@ -272,7 +273,7 @@ assign_median :: proc(img: ^Image64, palette: [256][3]f32, conf: ^Config) -> (^I
    out.colour_count = u32(conf.colour_count)
    for i in 0..<conf.colour_count
    {
-      out.palette = conf.palette[i]
+      out.palette[i] = conf.palette[i]
    }
 
    MedianColour :: struct
@@ -290,12 +291,12 @@ assign_median :: proc(img: ^Image64, palette: [256][3]f32, conf: ^Config) -> (^I
    }
 
    target: i32 = max(1, min(conf.target_colours, conf.colour_count))
-   colours := make([]MedianColour, 2 * img.width * img.height)
+   colours := make([]MedianColour, img.width * img.height)
    defer delete(colours)
 
    for i in 0..<img.width * img.height
    {
-      colours[i].colour = colour64_to_32(img.data[i])
+      #no_bounds_check colours[i].colour = colour64_to_32(img.data[i])
       colours[i].idx = u32(i)
    }
 
@@ -324,9 +325,9 @@ assign_median :: proc(img: ^Image64, palette: [256][3]f32, conf: ^Config) -> (^I
       cmin[0] = min(cmin[0], p[0])
       cmin[1] = min(cmin[1], p[1])
       cmin[2] = min(cmin[2], p[2])
-      cmax[0] = min(cmax[0], p[0])
-      cmax[1] = min(cmax[1], p[1])
-      cmax[2] = min(cmax[2], p[2])
+      cmax[0] = max(cmax[0], p[0])
+      cmax[1] = max(cmax[1], p[1])
+      cmax[2] = max(cmax[2], p[2])
    }
    boxes[0].range[0] = i32(cmax[0] - cmin[0])
    boxes[0].range[1] = i32(cmax[1] - cmin[1])
@@ -354,15 +355,18 @@ assign_median :: proc(img: ^Image64, palette: [256][3]f32, conf: ^Config) -> (^I
       largest: i32 = max(boxes[max_box].range[0], boxes[max_box].range[1], boxes[max_box].range[2])
       if largest == boxes[max_box].range[0]
       {
-         slice.sort_by(colours, proc(i, j: MedianColour) -> bool { return i.colour[0] > j.colour[0] })
+         slice.sort_by(colours[boxes[max_box].start:boxes[max_box].start + boxes[max_box].count], 
+            proc(i, j: MedianColour) -> bool { return i.colour[0] < j.colour[0] })
       }
       else if largest == boxes[max_box].range[1]
       {
-         slice.sort_by(colours, proc(i, j: MedianColour) -> bool { return i.colour[1] > j.colour[1] })
+         slice.sort_by(colours[boxes[max_box].start:boxes[max_box].start + boxes[max_box].count], 
+            proc(i, j: MedianColour) -> bool { return i.colour[1] < j.colour[1] })
       }
       else if largest == boxes[max_box].range[2]
       {
-         slice.sort_by(colours, proc(i, j: MedianColour) -> bool { return i.colour[2] > j.colour[2] })
+         slice.sort_by(colours[boxes[max_box].start:boxes[max_box].start + boxes[max_box].count], 
+            proc(i, j: MedianColour) -> bool { return i.colour[2] < j.colour[2] })
       }
 
       //Divide
@@ -412,9 +416,9 @@ assign_median :: proc(img: ^Image64, palette: [256][3]f32, conf: ^Config) -> (^I
          cmin[0] = min(cmin[0], p[0])
          cmin[1] = min(cmin[1], p[1])
          cmin[2] = min(cmin[2], p[2])
-         cmax[0] = min(cmax[0], p[0])
-         cmax[1] = min(cmax[1], p[1])
-         cmax[2] = min(cmax[2], p[2])
+         cmax[0] = max(cmax[0], p[0])
+         cmax[1] = max(cmax[1], p[1])
+         cmax[2] = max(cmax[2], p[2])
       }
       boxes[max_box].range[0] = i32(cmax[0] - cmin[0])
       boxes[max_box].range[1] = i32(cmax[1] - cmin[1])
@@ -429,9 +433,9 @@ assign_median :: proc(img: ^Image64, palette: [256][3]f32, conf: ^Config) -> (^I
          cmin[0] = min(cmin[0], p[0])
          cmin[1] = min(cmin[1], p[1])
          cmin[2] = min(cmin[2], p[2])
-         cmax[0] = min(cmax[0], p[0])
-         cmax[1] = min(cmax[1], p[1])
-         cmax[2] = min(cmax[2], p[2])
+         cmax[0] = max(cmax[0], p[0])
+         cmax[1] = max(cmax[1], p[1])
+         cmax[2] = max(cmax[2], p[2])
       }
       boxes[box_count].range[0] = i32(cmax[0] - cmin[0])
       boxes[box_count].range[1] = i32(cmax[1] - cmin[1])
@@ -460,9 +464,9 @@ assign_median :: proc(img: ^Image64, palette: [256][3]f32, conf: ^Config) -> (^I
          {
             dist: f32
             switch conf.colour_dist
-            {
-            case .RGB_Euclidian:
-               dist = dist_rgb_euclidian(palette[idx], c)
+         {
+         case .RGB_Euclidian:
+            dist = dist_rgb_euclidian(palette[idx], c)
             case .RGB_Weighted:
                dist = dist_rgb_weighted(palette[idx], c)
             case .RGB_Redmean:
@@ -492,13 +496,13 @@ assign_median :: proc(img: ^Image64, palette: [256][3]f32, conf: ^Config) -> (^I
 
          if i32(colour[3]) < conf.alpha_threshold
          {
-            out.data[idx] = 0
-            out32.data[idx] = 0
+            #no_bounds_check out.data[idx] = 0
+            #no_bounds_check out32.data[idx] = 0
          }
          else
          {
-            out.data[idx] = assign_lowest[i]
-            out32.data[idx] = out.palette[out.data[idx]]
+            #no_bounds_check out.data[idx] = assign_lowest[i]
+            #no_bounds_check out32.data[idx] = out.palette[out.data[idx]]
          }
       }
    }
@@ -617,7 +621,7 @@ kuhn_is_done :: proc(n: i32, m: i32, marks: []u8, covered: []b8) -> bool
       }
    }
 
-   return num_done == 0
+   return num_done == n
 }
 
 @(private="file")
@@ -726,7 +730,7 @@ kuhn_add_subtract :: proc(n: i32, m: i32, table: []f64, row_covered: []b8, col_c
       {
          if !col_covered[j] && table[i * m + j] < min
          {
-            min = table[i * m +j]
+            min = table[i * m + j]
          }
       }
    }
@@ -776,7 +780,7 @@ kuhn_alt_marks :: proc(n: i32, m: i32, marks: []u8, alt: []u32, col_marks: []i32
    for row >= 0
    {
       idx += 1
-      alt[idx] = u32(row * m) + alt[idx - 1] % u32(m)
+      alt[idx] = u32(row * m) + (alt[idx - 1] % u32(m))
       col = row_primes[alt[idx] / u32(m)]
       idx += 1
       alt[idx] = (alt[idx - 1] / u32(m)) * u32(m) + u32(col)

@@ -70,7 +70,7 @@ Config :: struct
    colour_count: i32,
 }
 
-load_preset :: proc(path: string, conf: ^Config)
+default_preset :: proc(conf: ^Config)
 {
    conf.blur_amount = 0.
    conf.sample_mode = 0

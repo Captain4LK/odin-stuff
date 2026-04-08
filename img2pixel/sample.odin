@@ -251,7 +251,6 @@ sample_cluster :: proc(img: ^Image64, width: i32, height: i32, x_off: f32, y_off
 {
    prof.SCOPED_EVENT(#procedure)
 
-   out: ^Image64 = image64_new(width, height)
    w: f32 = f32(img.width - 1) / f32(width)
    h: f32 = f32(img.height - 1) / f32(height)
 
@@ -264,6 +263,7 @@ sample_cluster :: proc(img: ^Image64, width: i32, height: i32, x_off: f32, y_off
       return sample_nearest(img, width, height, x_off, y_off)
    }
 
+   out: ^Image64 = image64_new(width, height)
    {
       cluster: ^Image32 = image32_new(igrid_x, igrid_y)
       defer free(cluster)
@@ -306,75 +306,4 @@ sample_cluster :: proc(img: ^Image64, width: i32, height: i32, x_off: f32, y_off
    }
 
    return out
-   /*
-            uint64_t c = color32_to_64(image32_kmeans_largest(cluster,colors,3,0xdeadbeef));
-            uint64_t r = color64_r(c);
-            uint64_t g = color64_g(c);
-            uint64_t b = color64_b(c);
-            out->data[y*width+x] = (r)|(g<<16)|(b<<32)|(a<<48);
-         }
-      }
-
-      free(cluster);
-   }
-
-   return out;
-   */
-
-   /*
-   out: ^Image64 = image64_new(width, height)
-   fw: f32 = f32(img.width - 1) / f32(width)
-   fh: f32 = f32(img.height - 1) / f32(height)
-
-   for y in 0..<height
-   {
-      for x in 0..<width
-      {
-         ix: i32 = i32((f32(x) + x_off + 0.5) * fw)
-         iy: i32 = i32((f32(y) + y_off + 0.5) * fh)
-         six: f32 = (f32(x) + x_off + 0.5) * fw - f32(ix)
-         siy: f32 = (f32(y) + y_off + 0.5) * fh - f32(iy)
-
-         a0: f32 = lanczos(six + 2)
-         a1: f32 = lanczos(six + 1)
-         a2: f32 = lanczos(six)
-         a3: f32 = lanczos(six - 1)
-         a4: f32 = lanczos(six - 2)
-         a5: f32 = lanczos(six - 3)
-         b0: f32 = lanczos(siy + 2)
-         b1: f32 = lanczos(siy + 1)
-         b2: f32 = lanczos(siy)
-         b3: f32 = lanczos(siy - 1)
-         b4: f32 = lanczos(siy - 2)
-         b5: f32 = lanczos(siy - 3)
-
-         c: [6][4]f32
-
-         for i in 0..<i32(6)
-         {
-            p00: [4]u16 = image64_get(img, ix - 2, iy - 2 + i, {0, 0, 0, 255})
-            p01: [4]u16 = image64_get(img, ix - 1, iy - 2 + i, {0, 0, 0, 255})
-            p02: [4]u16 = image64_get(img, ix, iy - 2 + i, {0, 0, 0, 255})
-            p03: [4]u16 = image64_get(img, ix + 1, iy - 2 + i, {0, 0, 0, 255})
-            p04: [4]u16 = image64_get(img, ix + 2, iy - 2 + i, {0, 0, 0, 255})
-            p05: [4]u16 = image64_get(img, ix + 3, iy - 2 + i, {0, 0, 0, 255})
-
-            for j in 0..<4
-            {
-               c[i][j] = a0 * f32(p00[j]) + a1 * f32(p01[j]) + a2 * f32(p02[j]) + a3 * f32(p03[j]) + a4 * f32(p04[j]) + a5 * f32(p05[j])
-            }
-         }
-
-         p: [4]u16
-         for i in 0..<4
-         {
-            p[i] = max(0, min(u16(max(i16)), u16(b0 * c[0][i] + b1 * c[1][i] + b2 * c[2][i] + b3 * c[3][i] + b4 * c[4][i] + b5 * c[5][i])))
-         }
-
-         out.data[y * out.width + x] = p
-      }
-   }
-
-   return out
-   */
 }

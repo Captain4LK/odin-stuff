@@ -202,4 +202,59 @@ checkbutton_draw :: proc(button: ^CheckButton)
             {bounds.min.x + offset + scale + dim, bounds.min.y + offset + scale + dim}}, "X", {0, 0, 0, 255}, true)
       }
    }
+   else if button.flags.style == 1
+   {
+      bounds: Rect = button.bounds
+      scale: i32 = get_scale()
+
+      draw_rectangle_fill(button, {bounds.min + scale, bounds.max - scale}, {90, 90, 90, 255})
+      //draw_rectangle(button, bounds, {0, 0, 0, 255})
+
+      /*
+      if button.state
+      {
+         draw_rectangle_fill(button, {{bounds.min[0] + scale, bounds.min[1] + 2 * scale},
+            {bounds.min[0] + 2 * scale, bounds.max[1] - 2 * scale}}, {0, 0, 0, 255})
+         draw_rectangle_fill(button, {{bounds.min[0] + scale, bounds.max[1] - 2 * scale},
+            {bounds.max[0] - 2 * scale, bounds.max[1] - scale}}, {0, 0, 0, 255})
+         draw_rectangle_fill(button, {{bounds.max[0] - 2 * scale, bounds.min[1] + 2 * scale},
+            {bounds.max[0] - scale, bounds.max[1] - 2 * scale}}, {50, 50, 50, 255})
+         draw_rectangle_fill(button, {{bounds.min[0] + 2 * scale, bounds.min[1] + scale},
+            {bounds.max[0] - scale, bounds.min[1] + 2 * scale}}, {50, 50, 50, 255})
+      }
+      else
+      {
+         draw_rectangle_fill(button, {{bounds.min[0] + scale, bounds.min[1] + 2 * scale},
+            {bounds.min[0] + 2 * scale, bounds.max[1] - 2 * scale}}, {50, 50, 50, 255})
+         draw_rectangle_fill(button, {{bounds.min[0] + scale, bounds.max[1] - 2 * scale},
+            {bounds.max[0] - 2 * scale, bounds.max[1] - scale}}, {50, 50, 50, 255})
+         draw_rectangle_fill(button, {{bounds.max[0] - 2 * scale, bounds.min[1] + 2 * scale},
+            {bounds.max[0] - scale, bounds.max[1] - 2 * scale}}, {200, 200, 200, 255})
+         draw_rectangle_fill(button, {{bounds.min[0] + 2 * scale, bounds.min[1] + scale},
+            {bounds.max[0] - scale, bounds.min[1] + 2 * scale}}, {200, 200, 200, 255})
+      }
+      */
+
+      height: i32 = (bounds.max.y - bounds.min.y)
+      dim: i32 = GLYPH_HEIGHT * scale
+      offset: i32 = (height - dim) / 2
+
+      draw_rectangle_fill(button, {{bounds.min.x + offset + scale, bounds.min.y + offset + scale}, 
+         {bounds.min.x + offset + 2 * scale, bounds.max.y - offset}}, {200, 200, 200, 255})
+      draw_rectangle_fill(button, {{bounds.min.x + offset + scale, bounds.max.y - offset - scale}, 
+         {bounds.min.x + offset + dim, bounds.max.y - offset}}, {200, 200, 200, 255})
+
+      draw_rectangle_fill(button, {{bounds.min.x + offset + 2 * scale, bounds.min.y + offset}, 
+         {bounds.min.x + offset + dim + scale, bounds.min.y + offset + scale}}, {50, 50, 50, 255})
+      draw_rectangle_fill(button, {{bounds.min.x + dim + offset, bounds.min.y + offset + scale}, 
+         {bounds.min.x + offset + dim + scale, bounds.max.y - offset - scale}}, {50, 50, 50, 255})
+
+      draw_label(button, {{bounds.min.x + dim + 2 * scale, bounds.min.y}, bounds.max}, button.text, {0, 0, 0, 255}, true)
+
+      if button.checked
+      {
+         draw_label(button, {{bounds.min.x + offset + 3 * scale, bounds.min.y + offset + scale},
+            {bounds.min.x + offset + scale + dim, bounds.min.y + offset + scale + dim}}, "X", {0, 0, 0, 255}, true)
+      }
+   }
 }

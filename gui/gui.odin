@@ -26,6 +26,8 @@ Context :: struct
    mouse: Mouse,
    timer_event: u32,
    open_file_event: u32,
+   open_folder_event: u32,
+   save_file_event: u32,
 }
 
 @(private="file")
@@ -181,6 +183,8 @@ Msg :: enum
    DRAGNDROP,
 
    OPENFILE,
+   SAVEFILE,
+   OPENFOLDER,
 
    USER0,
 }
@@ -297,6 +301,8 @@ init :: proc() -> bool
 
    ctx.timer_event = sdl3.RegisterEvents(1)
    ctx.open_file_event = sdl3.RegisterEvents(1)
+   ctx.save_file_event = sdl3.RegisterEvents(1)
+   ctx.open_folder_event = sdl3.RegisterEvents(1)
 
    return true
 }
@@ -986,6 +992,40 @@ msg_loop :: proc()
          free(msg)
 
          win = find_window(sdl3.GetWindowFromID(event.user.windowID))
+      case sdl3.EventType(ctx.save_file_event):
+         win = find_window(sdl3.GetWindowFromID(event.user.windowID))
+         if win != nil
+         {
+            element_msg(win, .SAVEFILE, 0, event.user.data1)
+         }
+
+         // delete msg context
+         msg: ^SaveFileMsg = cast(^SaveFileMsg)event.user.data1
+         for file in msg.file_list
+         {
+            delete(file)
+         }
+         delete(msg.file_list)
+         free(msg)
+
+         win = find_window(sdl3.GetWindowFromID(event.user.windowID))
+      case sdl3.EventType(ctx.open_folder_event):
+         win = find_window(sdl3.GetWindowFromID(event.user.windowID))
+         if win != nil
+         {
+            element_msg(win, .OPENFOLDER, 0, event.user.data1)
+         }
+
+         // delete msg context
+         msg: ^OpenFolderMsg = cast(^OpenFolderMsg)event.user.data1
+         for folder in msg.folder_list
+         {
+            delete(folder)
+         }
+         delete(msg.folder_list)
+         free(msg)
+
+         win = find_window(sdl3.GetWindowFromID(event.user.windowID))
       }
 
       if win != nil && win.redraw
@@ -1189,6 +1229,7 @@ window_close :: proc(win: ^Window)
    event: sdl3.Event
    event.type = .WINDOW_CLOSE_REQUESTED
    event.window.windowID = sdl3.GetWindowID(win.sdl_window)
+   res: bool = sdl3.PushEvent(&event)
 }
 
 overlay_clear :: proc(e: ^Element)
@@ -1352,5 +1393,72 @@ open_file_callback :: proc "c" (userdata: rawptr, filelist: [^]cstring, filter: 
       delete(filter.pattern)
    }
    delete(dialog_ctx.filters)
+   free(dialog_ctx)
+}
+
+@(private)
+save_file_callback :: proc "c" (userdata: rawptr, filelist: [^]cstring, filter: i32)
+{
+   dialog_ctx: ^DialogInternalCtx = cast(^DialogInternalCtx)userdata
+   context = dialog_ctx.ctx
+
+   filelist_len: i32 = 0
+   for filelist != nil
+   {
+      if filelist[filelist_len] == nil do break
+      filelist_len += 1
+   }
+
+   msg: ^SaveFileMsg = new(SaveFileMsg)
+   msg.ident = dialog_ctx.ident
+   msg.filter = filter
+   msg.file_list = make([]string, filelist_len)
+   for i in 0..<filelist_len
+   {
+      msg.file_list[i] = strings.clone_from_cstring(filelist[i])
+   }
+
+   event: sdl3.Event
+   event.type = sdl3.EventType(ctx.save_file_event)
+   event.user.windowID = sdl3.GetWindowID(dialog_ctx.window.sdl_window)
+   event.user.data1 = msg
+   res: bool = sdl3.PushEvent(&event)
+
+   for filter in dialog_ctx.filters
+   {
+      delete(filter.name)
+      delete(filter.pattern)
+   }
+   delete(dialog_ctx.filters)
+   free(dialog_ctx)
+}
+
+@(private)
+open_folder_callback :: proc "c" (userdata: rawptr, folderlist: [^]cstring, filter: i32)
+{
+   dialog_ctx: ^DialogInternalCtx = cast(^DialogInternalCtx)userdata
+   context = dialog_ctx.ctx
+
+   folderlist_len: i32 = 0
+   for folderlist != nil
+   {
+      if folderlist[folderlist_len] == nil do break
+      folderlist_len += 1
+   }
+
+   msg: ^OpenFolderMsg = new(OpenFolderMsg)
+   msg.ident = dialog_ctx.ident
+   msg.folder_list = make([]string, folderlist_len)
+   for i in 0..<folderlist_len
+   {
+      msg.folder_list[i] = strings.clone_from_cstring(folderlist[i])
+   }
+
+   event: sdl3.Event
+   event.type = sdl3.EventType(ctx.open_folder_event)
+   event.user.windowID = sdl3.GetWindowID(dialog_ctx.window.sdl_window)
+   event.user.data1 = msg
+   res: bool = sdl3.PushEvent(&event)
+
    free(dialog_ctx)
 }

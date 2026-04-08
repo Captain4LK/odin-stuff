@@ -23,6 +23,14 @@ label_create :: proc(parent: ^Element, flags: ElementFlags, str: string) -> ^Lab
    return label
 }
 
+label_set :: proc(label: ^Label, str: string)
+{
+   prof.SCOPED_EVENT(#procedure)
+
+   delete(label.text)
+   label.text = strings.clone(str)
+}
+
 @(private="file")
 label_msg :: proc(e: ^Element, msg: Msg, di: i64, dp: rawptr) -> i64
 {
@@ -40,6 +48,7 @@ label_msg :: proc(e: ^Element, msg: Msg, di: i64, dp: rawptr) -> i64
    }
    else if msg == .DRAW
    {
+      draw_rectangle_fill(label, label.bounds, {90, 90, 90, 255})
       draw_label(label, label.bounds, label.text, {31, 31, 31, 255}, true)
    }
    else if msg == .DESTROY

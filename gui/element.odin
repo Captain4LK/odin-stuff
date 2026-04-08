@@ -128,7 +128,6 @@ element_redraw :: proc(e: ^Element)
    //append(&e.window.redraw, e)
 }
 
-@(private="file")
 element_redraw_now :: proc(e: ^Element)
 {
    prof.SCOPED_EVENT(#procedure)

@@ -31,8 +31,8 @@ image64_blur :: proc(img: ^Image64, sz: f32) #no_bounds_check
 
    // Vertical
    {
-      buffer0 := make([][4]u16, img.width)
-      buffer1 := make([][4]u16, img.width)
+      buffer0 := make([][4]u16, img.height)
+      buffer1 := make([][4]u16, img.height)
       defer delete(buffer0)
       defer delete(buffer1)
 

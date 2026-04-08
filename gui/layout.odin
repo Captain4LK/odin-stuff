@@ -88,6 +88,10 @@ element_calculate_height :: proc(e: ^Element)
          width_local += child.size[0]
       }
 
+      if width_local != 0
+      {
+         size[1] += height_local
+      }
       size += e.pad[0] + e.pad[1]
       size[minor] += e.child_gap * i32(len(e.children) - 1)
       space: [2]i32 = {size[1], e.size[0]}

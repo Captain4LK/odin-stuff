@@ -75,7 +75,7 @@ imgcmp_update0 :: proc(img: ^ImageComp, pix: []u8, width: i32, height: i32)
    img.height0 = height
    img.img0 = texture_from_data(img.window, pix, width, height)
 
-   imgcmp_update_view(img, true)
+   imgcmp_update_view(img, false)
 }
 
 imgcmp_update1 :: proc(img: ^ImageComp, pix: []u8, width: i32, height: i32)
